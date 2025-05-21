@@ -1,8 +1,10 @@
+-- init.lua
+
 -- Ensure Packer is installed
 local packer_path = vim.fn.stdpath("data") .. "/site/pack/packer/start/packer.nvim"
 if vim.fn.empty(vim.fn.glob(packer_path)) > 0 then
     print("Installing Packer... Restart Neovim after installation!")
-    vim.fn.system({"git", "clone", "--depth", "1", "https://github.com/wbthomason/packer.nvim", packer_path})
+    vim.fn.system({ "git", "clone", "--depth", "1", "https://github.com/wbthomason/packer.nvim", packer_path })
     vim.cmd("packadd packer.nvim")
 end
 
@@ -14,14 +16,13 @@ vim.opt.relativenumber = false
 -- Keymaps
 vim.api.nvim_set_keymap("c", "w!!", "w !sudo tee % >/dev/null", { noremap = true, silent = true })
 
--- Load Packer
+-- Plugin setup
 local status_ok, packer = pcall(require, "packer")
 if not status_ok then
     print("Packer is not installed! Run :PackerSync after installing it.")
     return
 end
 
--- Plugin setup
 packer.startup(function(use)
     use "wbthomason/packer.nvim"
     use { "williamboman/mason.nvim" }
@@ -39,48 +40,47 @@ packer.startup(function(use)
     use { "sphamba/smear-cursor.nvim" }
     use { "ray-x/lsp_signature.nvim" }
     use { "folke/tokyonight.nvim" }
+    use { "jose-elias-alvarez/null-ls.nvim" }
+
 end)
 
--- Defer colorscheme and custom highlights
+-- Colorscheme and highlights
 vim.schedule(function()
     local ok = pcall(vim.cmd, "colorscheme tokyonight-night")
     if ok then
-        -- Dimmed italic comments
         vim.api.nvim_set_hl(0, "Comment", { fg = "#5c5c5c", italic = true })
-
-        -- Darker background tweaks
-        vim.api.nvim_set_hl(0, "Normal",       { bg = "#0a0a0a", fg = "#c0c0c0" })
-        vim.api.nvim_set_hl(0, "NormalNC",     { bg = "#0a0a0a" })
-        vim.api.nvim_set_hl(0, "CursorLine",   { bg = "#111111" })
-        vim.api.nvim_set_hl(0, "Visual",       { bg = "#222222" })
-        vim.api.nvim_set_hl(0, "Pmenu",        { bg = "#101010", fg = "#c0c0c0" })
-        vim.api.nvim_set_hl(0, "FloatBorder",  { bg = "#0a0a0a", fg = "#5c5c5c" })
-        vim.api.nvim_set_hl(0, "NormalFloat",  { bg = "#0a0a0a" })
+        vim.api.nvim_set_hl(0, "Normal", { bg = "#0a0a0a", fg = "#c0c0c0" })
+        vim.api.nvim_set_hl(0, "NormalNC", { bg = "#0a0a0a" })
+        vim.api.nvim_set_hl(0, "CursorLine", { bg = "#111111" })
+        vim.api.nvim_set_hl(0, "Visual", { bg = "#222222" })
+        vim.api.nvim_set_hl(0, "Pmenu", { bg = "#101010", fg = "#c0c0c0" })
+        vim.api.nvim_set_hl(0, "FloatBorder", { bg = "#0a0a0a", fg = "#5c5c5c" })
+        vim.api.nvim_set_hl(0, "NormalFloat", { bg = "#0a0a0a" })
     else
         print("tokyonight-night not found. Run :PackerSync to install it.")
     end
 end)
 
--- Smear Cursor setup
+-- Smear Cursor
 require("smear_cursor").setup({})
 
 -- Treesitter
 require("nvim-treesitter.configs").setup({
-    ensure_installed = { "glsl", "c" },
+    ensure_installed = { "glsl", "c", "cpp", "c_sharp" },
     highlight = {
         enable = true,
         additional_vim_regex_highlighting = false,
     },
 })
 
--- Telescope keybindings
+-- Telescope
 local builtin = require("telescope.builtin")
 vim.keymap.set("n", "<leader>ff", builtin.find_files, {})
 vim.keymap.set("n", "<leader>fg", builtin.live_grep, {})
 vim.keymap.set("n", "<leader>fb", builtin.buffers, {})
 vim.keymap.set("n", "<leader>fh", builtin.help_tags, {})
 
--- LSP Signature Hints
+-- LSP Signature
 require("lsp_signature").setup({
     bind = true,
     floating_window = true,
@@ -90,29 +90,39 @@ require("lsp_signature").setup({
 -- Mason & LSP config
 require("mason").setup()
 require("mason-lspconfig").setup({
-    ensure_installed = { "lua_ls", "clangd" },
+    ensure_installed = { "lua_ls", "clangd"},
     automatic_installation = true,
 })
 
--- LSP configurations
+-- Common LSP setup
 local lspconfig = require("lspconfig")
+local capabilities = require("cmp_nvim_lsp").default_capabilities()
+local on_attach = function(_, bufnr)
+    local opts = { buffer = bufnr }
+    vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
+    vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+    vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
+end
 
+
+
+-- clangd for C/C++
 lspconfig.clangd.setup({
     cmd = {
         "clangd",
-        "--query-driver=C:/msys64/mingw64/bin/gcc.exe",
+        "--query-driver=C:/msys64/ucrt64/bin/gcc.exe",
         "--compile-commands-dir=.",
-        "--header-insertion=iwyu",
-        "--include-directory=C:/msys64/mingw64/include/",
+        "--header-insertion=iwyu"
     },
-    on_attach = function()
-        print("Clangd attached")
-    end,
+    on_attach = on_attach,
+    capabilities = capabilities,
 })
 
-for _, server in ipairs({ "lua_ls", "clangd" }) do
-    lspconfig[server].setup({})
-end
+-- lua_ls for Lua
+lspconfig.lua_ls.setup({
+    on_attach = on_attach,
+    capabilities = capabilities,
+})
 
 -- nvim-cmp setup
 local cmp = require("cmp")
@@ -128,16 +138,25 @@ cmp.setup({
     },
 })
 
--- Formatter
+-- Formatter setup
 require("formatter").setup({
     filetype = {
         c = { require("formatter.filetypes.c").clangformat },
         cpp = { require("formatter.filetypes.cpp").clangformat },
+        csharp = {
+            function()
+                return {
+                    exe = "dotnet-csharpier",
+                    args = { "--write-stdout" },
+                    stdin = true,
+                }
+            end,
+        },
     }
 })
-vim.cmd([[autocmd BufWritePost * FormatWrite]])
+vim.cmd([[autocmd BufWritePost *.c,*.cpp,*.h,*.cs FormatWrite]])
 
--- Autopairs
+-- Autopairs setup
 require("nvim-autopairs").setup({
     check_ts = true,
     disable_filetype = { "TelescopePrompt" },
@@ -154,6 +173,7 @@ require("nvim-autopairs").setup({
     },
 })
 
--- Connect cmp to autopairs
+-- Connect autopairs to cmp
 local cmp_autopairs = require("nvim-autopairs.completion.cmp")
 cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
+
